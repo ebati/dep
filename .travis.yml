@@ -6,6 +6,7 @@ notifications:
 jobs:
   include:
     - stage: test
+      go_import_path: github.com/golang/dep
       install:
         - go get -u honnef.co/go/tools/cmd/{gosimple,staticcheck}
         - npm install -g codeclimate-test-reporter
@@ -29,6 +30,7 @@ jobs:
     - &simple-test
       go: 1.7.x
       stage: test
+      go_import_path: github.com/golang/dep
       install: skip
       env:
         - DEPTESTBYPASS501=1
