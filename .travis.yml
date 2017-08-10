@@ -57,6 +57,7 @@ jobs:
     stage: deploy
     go_import_path: github.com/golang/dep
     install: skip
+    script: skip
     before_deploy:
     - mkdir -p release
     - GOOS=linux  GOARCH=amd64 go build -o release/dep-linux-amd64
