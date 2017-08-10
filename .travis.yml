@@ -1,57 +1,74 @@
----
 language: go
 sudo: false
 notifications:
   email: false
 jobs:
   include:
-    - stage: test
-      go_import_path: github.com/golang/dep
-      install:
-        - go get -u honnef.co/go/tools/cmd/{gosimple,staticcheck}
-        - npm install -g codeclimate-test-reporter
-      env:
-        - DEPTESTBYPASS501=1
-      os: linux
-      go: 1.8.x
-      script:
-        - go build -v ./cmd/dep
-        - PKGS=$(go list ./... | grep -v /vendor/)
-        - go vet $PKGS
-        - staticcheck $PKGS
-        - gosimple $PKGS
-        - ./hack/validate-vendor.bash
-        - go build ./hack/licenseok
-        - find . -path ./vendor -prune -o -type f -name "*.go" -printf '%P\n' | xargs ./licenseok
-        - set -e; for pkg in $PKGS; do go test -race -coverprofile=profile.out -covermode=atomic $pkg; if [[ -f profile.out ]]; then cat profile.out >> coverage.txt; rm profile.out; fi; done
-      after_success:
-        - codeclimate-test-reporter < coverage.txt
-    # YAML alias, for settings shared across the simpler builds
-    - &simple-test
-      go: 1.7.x
-      stage: test
-      go_import_path: github.com/golang/dep
-      install: skip
-      env:
-        - DEPTESTBYPASS501=1
-      script: go test -race $(go list ./... | grep -v vendor)
-    - <<: *simple-test
-      go: tip
-    - <<: *simple-test
-      os: osx
-      go: 1.8.x
-      install:
-        # brew takes horribly long to update itself despite the above caching
-        # attempt; only bzr install if it's not on the $PATH
-        - test $(which bzr) || brew install bzr
-      env:
-        - HOMEBREW_NO_AUTO_UPDATE=1
-        - DEPTESTBYPASS501=1
-      script:
-        # OSX as of El Capitan sets an exit trap that interacts poorly with how
-        # travis seems to spawn these shells; if set -e is set, then it can cause
-        # build failures. We're not doing that here, but retain the trap statement
-        # for future safety.
-        # Related: https://superuser.com/questions/1044130/why-am-i-having-how-can-i-fix-this-error-shell-session-update-command-not-f
-        - trap EXIT
-        - go test -race $(go list ./... | grep -v vendor)
+  - stage: test
+    go_import_path: github.com/golang/dep
+    install:
+    - go get -u honnef.co/go/tools/cmd/{gosimple,staticcheck}
+    - npm install -g codeclimate-test-reporter
+    env:
+    - DEPTESTBYPASS501=1
+    os: linux
+    go: 1.8.x
+    script:
+    - go build -v ./cmd/dep
+    - PKGS=$(go list ./... | grep -v /vendor/)
+    - go vet $PKGS
+    - staticcheck $PKGS
+    - gosimple $PKGS
+    - "./hack/validate-vendor.bash"
+    - go build ./hack/licenseok
+    - find . -path ./vendor -prune -o -type f -name "*.go" -printf '%P\n' | xargs
+      ./licenseok
+    - set -e; for pkg in $PKGS; do go test -race -coverprofile=profile.out -covermode=atomic
+      $pkg; if [[ -f profile.out ]]; then cat profile.out >> coverage.txt; rm profile.out;
+      fi; done
+    after_success:
+    # - codeclimate-test-reporter < coverage.txt
+  - go: 1.7.x
+    stage: test
+    go_import_path: github.com/golang/dep
+    install: skip
+    env: &1
+    - DEPTESTBYPASS501=1
+    script: go test -race $(go list ./... | grep -v vendor)
+  - go: tip
+    stage: test
+    go_import_path: github.com/golang/dep
+    install: skip
+    env: *1
+    script: go test -race $(go list ./... | grep -v vendor)
+  - go: 1.8.x
+    stage: test
+    go_import_path: github.com/golang/dep
+    install:
+    - test $(which bzr) || brew install bzr
+    env:
+    - HOMEBREW_NO_AUTO_UPDATE=1
+    - DEPTESTBYPASS501=1
+    script:
+    - trap EXIT
+    - go test -race $(go list ./... | grep -v vendor)
+    os: osx
+  - go: 1.8.x
+    stage: deploy
+    go_import_path: github.com/golang/dep
+    install: skip
+    before_deploy:
+    - mkdir -p release
+    - GOOS=linux  GOARCH=amd64 go build -o release/dep-linux-amd64
+    - GOOS=darwin GOARCH=amd64 go build -o release/dep-darwin-amd64
+    deploy:
+      provider: releases
+      api_key:
+        secure: 0NNP/UECkaaYENA0yQNLpPAyCXZvriRWl6udS82ksU98LXBfcpo0GTFMNKcQaR/bMecl5txC4BRcTq4tZiut/yhH4KluDUARm3S1/iK9SJ55CvmGGpHCHib60KtqS/pya7LqqOQyTLPlFC/gpRvpiQEqL/dwU2qMroJ1HjoNPZ2Iw4uoSfqKuXHY4KMjwtp7421fDKts3ujQQ0vrbeaHslZUKq4jWj9OPwVOSlEK11OkGzGl734ns84ge7FUnWm8x0O3rTCHZKuDXhvwgGCiL+OM7NKiZfXJ08sSm0rrMod5XK299r8lnDdCXS6FBAy6M99r3OJRC2aH+qOin1LEUUXomOznfjeD1mWYHxklndmyWjsvqKJlad0Lf+7vxqylF0kDef6/AqQ/j4MbLZ0XphQpocYlF2bkOLvO+F7mPM87oGv7OVrfk8+VYRTMNuo9RHWM71k5wXSCjoGrATez2K4Z64BI0Xzj3vgcLBxipUDZBR2Z0M0PrEkV8BOvIOsA1iHZV32mDQCvJR1480CJIkne0xgY25DrQV4guZO1EDAo8/dQAjctrFJZ+SGLwxjONnXzUZmlxx0/jzkyvSGy4+1qiEPNt05WOkRmUwPqy/ZfIx1hQeJN3eNjVZty9nr5wXfZZTST2AMpYQ6aILhhcV3yayNKAAEHmMFeKsQnWcw=
+      file:
+        - release/dep-linux-amd64
+        - release/dep-darwin-amd64
+      skip_cleanup: true
+      on:
+        repo: ebati/dep
+        tags: true
